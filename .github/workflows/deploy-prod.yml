@@ -1,0 +1,48 @@
+# Deploy CDK stack to prod when code is pushed to the prod branch.
+name: Deploy Prod
+
+on:
+  push:
+    branches: [prod]
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Prod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install infrastructure dependencies
+        working-directory: infrastructure
+        run: npm ci
+
+      - name: Configure AWS credentials (prod)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: CDK synth
+        working-directory: infrastructure
+        run: npx cdk synth --context environment=prod
+
+      - name: CDK deploy (prod)
+        working-directory: infrastructure
+        run: npx cdk deploy --all --require-approval never --context environment=prod
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
