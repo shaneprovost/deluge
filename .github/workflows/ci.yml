@@ -3,9 +3,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, staging, prod]
+    branches: [main, staging]
   push:
-    branches: [main, staging, prod]
+    branches: [main, staging]
 
 jobs:
   ci:

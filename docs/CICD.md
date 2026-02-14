@@ -4,19 +4,18 @@ This doc covers the GitHub repo layout, CI checks, deploy pipelines, and how to 
 
 ## Branch model
 
-- **main** – default branch; feature branches merge here (or into `staging` first, depending on your flow).
+- **main** – production branch; deploys to the **prod** AWS environment (CDK `environment=prod`). Protect this branch and require CI before merge.
 - **staging** – deploys to the **staging** AWS environment (CDK `environment=staging`).
-- **prod** – deploys to the **prod** AWS environment (CDK `environment=prod`).
 
-Typical flow: merge into `staging` → pipeline deploys to staging; when ready, merge `staging` into `prod` → pipeline deploys to prod.
+Typical flow: merge into `staging` → pipeline deploys to staging; when ready, merge `staging` into `main` → pipeline deploys to prod.
 
 ## Workflows
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| **CI** | Pull requests and pushes to `main`, `staging`, `prod` | Runs lint and build. Use as the required status check for branch protection. |
+| **CI** | Pull requests and pushes to `main`, `staging` | Runs lint and build. Use as the required status check for branch protection. |
 | **Deploy Staging** | Push to `staging` | Deploys CDK stack to staging (uses staging AWS credentials). |
-| **Deploy Prod** | Push to `prod` | Deploys CDK stack to prod (uses prod AWS credentials). |
+| **Deploy Prod** | Push to `main` | Deploys CDK stack to prod (uses prod AWS credentials). |
 
 ## GitHub Secrets
 
@@ -49,7 +48,8 @@ Use separate IAM users (or roles) for staging and prod so each pipeline only has
 
 1. Go to **Settings → Branches**.
 2. Add a **Branch protection rule** for:
-   - **Branch name pattern:** `staging` (then repeat for `prod`, and optionally `main` if you protect it).
+   - **Branch name pattern:** `main` (production – strongly recommended).
+   - **Branch name pattern:** `staging`.
 3. Enable:
    - **Require a pull request before merging** (optional but recommended).
    - **Require status checks to pass before merging**.
@@ -61,12 +61,12 @@ After this, GitHub will block merging until the **CI** workflow (the “Lint & B
 ## First-time setup
 
 1. Create the repo and push `main` with the code.
-2. Create `staging` and `prod` branches (e.g. `git checkout -b staging && git push -u origin staging`).
+2. Create the `staging` branch (e.g. `git checkout -b staging && git push -u origin staging`).
 3. Add the secrets above.
-4. Configure branch protection for `staging` and `prod` (and optionally `main`) with the “Lint & Build” status check.
+4. Configure branch protection for `main` and `staging` with the “Lint & Build” status check.
 5. Bootstrap CDK once per account/region (e.g. run `npx cdk bootstrap` locally with the staging profile, then with the prod profile).
-6. Merge (or push) to `staging` to trigger the first staging deploy; merge to `prod` when you want the first prod deploy.
+6. Merge (or push) to `staging` to trigger the first staging deploy; merge to `main` when you want to deploy to prod.
 
 ## Optional: GitHub Environments
 
-For prod you can use **Environments** (Settings → Environments → New environment, e.g. `prod`) and add **Required reviewers** or **Wait timer** so prod deploys only after approval or a delay. The deploy-prod workflow would then reference the environment with `environment: prod` in the deploy job to use that environment’s protection rules.
+For prod you can use **Environments** (Settings → Environments → New environment, e.g. `prod`) and add **Required reviewers** or **Wait timer** so prod deploys only after approval or a delay. The Deploy Prod workflow would then reference the environment with `environment: prod` in the deploy job to use that environment’s protection rules.

@@ -1,9 +1,9 @@
-# Deploy CDK stack to prod when code is pushed to the prod branch.
+# Deploy CDK stack to prod when code is pushed to main.
 name: Deploy Prod
 
 on:
   push:
-    branches: [prod]
+    branches: [main]
 
 concurrency:
   group: deploy-prod
