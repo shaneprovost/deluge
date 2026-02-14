@@ -31,8 +31,10 @@ async function main() {
   for (const c of CEMETERIES) {
     const created = await cemeteriesRepository.create({
       name: c.name,
+      address: null,
       city: c.city,
       state: c.state,
+      zipCode: null,
       latitude: c.latitude,
       longitude: c.longitude,
       archdiocese: c.archdiocese,
