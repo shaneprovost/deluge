@@ -16,6 +16,7 @@ Deluge enables anonymous users to offer prayers for deceased clergy and religiou
 | [Type Definitions](docs/TYPE_DEFINITIONS.md) | TypeScript types and validation schemas |
 | [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) | Phased development roadmap |
 | [CI/CD & GitHub](docs/CICD.md) | Pipelines, branch protection, staging/prod deploys |
+| [AWS Setup](docs/AWS_SETUP.md) | IAM users, policies, profiles, CDK bootstrap, GitHub secrets |
 
 ## Tech Stack
 
