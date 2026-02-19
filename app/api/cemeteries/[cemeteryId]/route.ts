@@ -3,6 +3,8 @@ import { cemeteriesRepository } from "@/lib/db/cemeteries";
 import { prayersRepository } from "@/lib/db/prayers";
 import type { CemeteryDetailResponse, RecentPrayerActivity } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ cemeteryId: string }> }

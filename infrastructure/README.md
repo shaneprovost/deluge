@@ -67,3 +67,18 @@ aws ssm get-parameter --name "/deluge/dev/tables/deceased" --query Parameter.Val
 ```
 
 For Next.js, set env vars at build or runtime from these values, and ensure the deployment has IAM permissions to read DynamoDB (and optionally SSM).
+
+## IAM – DynamoDB data-plane (app & seed)
+
+CDK deploy only needs table-management actions (CreateTable, UpdateTable, etc.). The app and the seed script need **data-plane** actions (PutItem, GetItem, Query, Scan, etc.) on the Deluge tables.
+
+If you use an IAM user (e.g. `deluge-staging`, `deluge-prod`) for both deploy and running the app/seed, add a statement like the one in **`iam-dynamodb-data-policy-snippet.json`** to that user’s policy:
+
+1. Open **IAM → Users → &lt;your-user&gt; → Permissions → Add permissions → Create inline policy** (or edit the existing policy).
+2. Add a new statement with the contents of `iam-dynamodb-data-policy-snippet.json` (Sid `DynamoDBData`, Effect Allow, the listed actions, Resource `arn:aws:dynamodb:*:*:table/deluge-*` and `.../table/deluge-*/index/*`).
+
+After saving, the seed command should succeed:
+
+```bash
+DYNAMODB_TABLE_PREFIX=deluge-staging AWS_PROFILE=deluge-staging npm run seed
+```
