@@ -4,7 +4,8 @@ import { prayersRepository } from "@/lib/db/prayers";
 import { deceasedRepository } from "@/lib/db/deceased";
 import { checkRateLimitPray, incrementRateLimitPray } from "@/lib/db/rate-limit";
 import { getSessionId, getIpHash } from "@/lib/utils/hash";
-import { PRAYER_COOLDOWN_SECONDS } from "@/config/constants";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
@@ -89,9 +90,6 @@ export async function POST(request: NextRequest) {
 
     await incrementRateLimitPray(sessionId, ipHash);
 
-    const createdAt = new Date(prayer.createdAt);
-    const canRequestAt = new Date(createdAt.getTime() + PRAYER_COOLDOWN_SECONDS * 1000);
-
     return NextResponse.json(
       {
         success: true,
@@ -100,10 +98,6 @@ export async function POST(request: NextRequest) {
           personId: prayer.personId,
           prayerType: prayer.prayerType,
           createdAt: prayer.createdAt,
-        },
-        meta: {
-          cooldownSeconds: PRAYER_COOLDOWN_SECONDS,
-          canRequestNewAssignmentAt: canRequestAt.toISOString(),
         },
       },
       { status: 201 }

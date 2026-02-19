@@ -1,3 +1,6 @@
+/** Minimum seconds user must wait before tapping "Finish" (abuse prevention) */
+export const PRAY_MINIMUM_SECONDS = 15;
+
 /** Cooldown in seconds before user can request a new assignment after praying */
 export const PRAYER_COOLDOWN_SECONDS = 30;
 

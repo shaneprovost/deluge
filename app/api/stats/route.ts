@@ -4,6 +4,8 @@ import { prayersRepository } from "@/lib/db/prayers";
 import type { GlobalStats, GlobalRecentActivity } from "@/lib/types";
 import type { PrayerType } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const cemeteries = await cemeteriesRepository.listByArchdiocese("Atlanta");

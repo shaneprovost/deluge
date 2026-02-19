@@ -25,6 +25,10 @@ Deluge enables anonymous users to offer prayers for deceased clergy and religiou
 - **Hosting:** Vercel
 - **Future Auth:** AWS Cognito / NextAuth
 
+## Internationalization (i18n)
+
+UI strings are driven by **i18next** and **react-i18next**, with a single source file **`site-copy.json`** (same pattern as Our Prayer). Locales live under top-level keys (`en`, `es`, …); namespaces group keys by screen or area (`common`, `home`, `pray`, `map`, etc.). The language switcher in the header persists the choice in `localStorage` (`deluge-locale`) and all buttons/text use `useTranslation(namespace)` and `t("key")`. Add new strings in `site-copy.json` and new locales by adding another top-level language object.
+
 ## Core Features (MVP)
 
 ### Prayer Flow
