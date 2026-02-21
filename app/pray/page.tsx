@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import type { PrayerType } from "@/lib/types";
+import type { MysterySet } from "@/lib/rosary";
 import { PRAY_MINIMUM_SECONDS } from "@/config/constants";
+
+const MYSTERY_SETS: MysterySet[] = ["joyful", "sorrowful", "glorious", "luminous"];
 
 const PRAYER_TYPES: PrayerType[] = [
   "our_father",
@@ -50,9 +54,13 @@ function incrementSessionPrayCount(): number {
 export default function PrayPage() {
   const { t } = useTranslation("pray");
   const { t: tPrayers } = useTranslation("prayers");
+  const { t: tRosary } = useTranslation("rosary");
+  const router = useRouter();
   const [flowState, setFlowState] = useState<FlowState>("loading");
   const [assignData, setAssignData] = useState<AssignData | null>(null);
   const [selectedType, setSelectedType] = useState<PrayerType | null>(null);
+  const [selectedDecadeMystery, setSelectedDecadeMystery] = useState<{ mysterySet: MysterySet; decade: number } | null>(null);
+  const [expandedMysterySet, setExpandedMysterySet] = useState<MysterySet | null>(null);
   const [assignError, setAssignError] = useState<{ message: string; retryAfterSeconds?: number } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [canFinishAt, setCanFinishAt] = useState<number>(0);
@@ -106,8 +114,31 @@ export default function PrayPage() {
   }, [flowState]);
 
   const handleStart = useCallback(() => {
-    if (selectedType) setFlowState("praying");
-  }, [selectedType]);
+    if (!selectedType) return;
+    if (selectedType === "decade_rosary") {
+      if (!selectedDecadeMystery || !assignData) return;
+      try {
+        sessionStorage.setItem("deluge_rosary_single_person", JSON.stringify(assignData));
+        sessionStorage.setItem("deluge_rosary_decade", JSON.stringify(selectedDecadeMystery));
+      } catch {
+        // ignore
+      }
+      router.push("/pray/rosary");
+      return;
+    }
+    if (selectedType === "full_rosary") {
+      if (assignData) {
+        try {
+          sessionStorage.setItem("deluge_rosary_single_person", JSON.stringify(assignData));
+        } catch {
+          // ignore
+        }
+      }
+      router.push("/pray/rosary");
+      return;
+    }
+    setFlowState("praying");
+  }, [selectedType, router, assignData, selectedDecadeMystery]);
 
   const handleFinish = useCallback(async () => {
     if (!assignData || !selectedType) return;
@@ -174,11 +205,14 @@ export default function PrayPage() {
   if (flowState === "choose_type" && assignData) {
     return (
       <main className="min-h-screen p-8 max-w-lg mx-auto">
-        <h1 className="font-serif text-2xl text-primary mb-2">{t("title")}</h1>
-        <p className="text-charcoal/80 mb-2">
-          {t("person-line", {
+        <p className="font-serif text-2xl text-primary mb-1">
+          {t("pray-for-name", {
             firstName: assignData.firstName,
             lastInitial: assignData.lastInitial,
+          })}
+        </p>
+        <p className="text-charcoal/70 text-base mb-1">
+          + {t("year-role-line", {
             year: assignData.yearOfDeath,
             role: roleLabel,
           })}
@@ -190,28 +224,106 @@ export default function PrayPage() {
             state: assignData.cemetery.state,
           })}
         </p>
-        <p className="font-medium text-charcoal mb-3">{t("choose-how")}</p>
-        <ul className="space-y-2 mb-6">
-          {PRAYER_TYPES.map((type) => (
-            <li key={type}>
-              <button
-                type="button"
-                onClick={() => setSelectedType(type)}
-                className={`w-full text-left rounded-lg border-2 px-4 py-3 transition ${
-                  selectedType === type
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-charcoal/20 text-charcoal hover:border-primary/50"
-                }`}
-              >
-                {t(`prayer-type-${type}`)}
-              </button>
-            </li>
-          ))}
+        <p className="font-medium text-charcoal mb-3">{t("choose-how-for", { firstName: assignData.firstName })}</p>
+        <ul className="space-y-2 mb-4">
+          {PRAYER_TYPES.map((type) => {
+            if (type === "decade_rosary") {
+              const isExpanded = selectedType === "decade_rosary";
+              return (
+                <li
+                  key={type}
+                  className={`rounded-lg border-2 overflow-hidden transition ${
+                    isExpanded ? "border-primary" : "border-charcoal/20"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isExpanded) {
+                        setSelectedType(null);
+                        setSelectedDecadeMystery(null);
+                        setExpandedMysterySet(null);
+                      } else {
+                        setSelectedType("decade_rosary");
+                        setExpandedMysterySet(null);
+                        setSelectedDecadeMystery(null);
+                      }
+                    }}
+                    className={`w-full text-left px-4 py-3 flex items-center justify-between transition ${
+                      isExpanded ? "bg-primary/10 text-primary" : "text-charcoal hover:bg-charcoal/5"
+                    }`}
+                  >
+                    <span>{t(`prayer-type-${type}`)}</span>
+                    <span className="shrink-0 ml-2 text-current opacity-70" aria-hidden>
+                      {isExpanded ? "−" : "+"}
+                    </span>
+                  </button>
+                  {isExpanded && (
+                    <div className="border-t border-charcoal/10 bg-cream/30 px-2 pb-2 pt-1">
+                      <p className="font-medium text-charcoal/80 text-sm mb-2 px-2">{t("choose-decade-mystery")}</p>
+                      <div className="space-y-1">
+                        {MYSTERY_SETS.map((set) => (
+                          <div key={set} className="rounded-lg border border-charcoal/20 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedMysterySet((prev) => (prev === set ? null : set))}
+                              className="w-full text-left px-4 py-2.5 flex items-center justify-between bg-cream hover:bg-charcoal/5 transition text-sm"
+                            >
+                              <span className="font-medium text-charcoal">{tRosary(set)}</span>
+                              <span className="text-charcoal/60" aria-hidden>
+                                {expandedMysterySet === set ? "−" : "+"}
+                              </span>
+                            </button>
+                            {expandedMysterySet === set && (
+                              <div className="border-t border-charcoal/10 bg-cream/50">
+                                {[1, 2, 3, 4, 5].map((decade) => (
+                                  <button
+                                    key={decade}
+                                    type="button"
+                                    onClick={() => setSelectedDecadeMystery({ mysterySet: set, decade })}
+                                    className={`w-full text-left px-4 py-2 text-sm transition ${
+                                      selectedDecadeMystery?.mysterySet === set && selectedDecadeMystery?.decade === decade
+                                        ? "bg-primary/15 text-primary font-medium"
+                                        : "text-charcoal hover:bg-charcoal/5"
+                                    }`}
+                                  >
+                                    {tRosary(`${set}-${decade}`)}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            }
+            return (
+              <li key={type}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedType(type);
+                    setSelectedDecadeMystery(null);
+                  }}
+                  className={`w-full text-left rounded-lg border-2 px-4 py-3 transition ${
+                    selectedType === type
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-charcoal/20 text-charcoal hover:border-primary/50"
+                  }`}
+                >
+                  {t(`prayer-type-${type}`)}
+                </button>
+              </li>
+            );
+          })}
         </ul>
         <button
           type="button"
           onClick={handleStart}
-          disabled={!selectedType}
+          disabled={!selectedType || (selectedType === "decade_rosary" && !selectedDecadeMystery)}
           className="w-full rounded-lg bg-primary px-6 py-3 text-cream font-medium shadow-md hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {t("start")}
@@ -224,32 +336,58 @@ export default function PrayPage() {
     const finishEnabled = canFinishAt === 0;
 
     return (
-      <main className="min-h-screen p-8 max-w-lg mx-auto flex flex-col">
-        <p className="text-charcoal/80 mb-4">
-          {t("person-line", {
-            firstName: assignData.firstName,
-            lastInitial: assignData.lastInitial,
-            year: assignData.yearOfDeath,
-            role: roleLabel,
-          })}
-        </p>
-        <div className="rounded-lg bg-cream/30 border border-charcoal/10 p-6 mb-6 flex-1">
-          <p className="text-charcoal whitespace-pre-wrap font-serif leading-relaxed">
-            {tPrayers(selectedType)}
+      <main className="min-h-screen flex flex-col max-w-lg mx-auto bg-cream pb-32">
+        <div className="flex-shrink-0 px-4 pt-4 pb-3">
+          <p className="text-charcoal/60 text-sm mb-2">
+            {t(`prayer-type-${selectedType}`)}
           </p>
+          <div className="mb-3">
+            <p className="font-serif text-xl text-primary leading-snug">
+              {t("person-line", {
+                firstName: assignData.firstName,
+                lastInitial: assignData.lastInitial,
+                year: assignData.yearOfDeath,
+                role: roleLabel,
+              })}
+            </p>
+            <p className="text-charcoal/70 text-base leading-snug mt-1">
+              {t("cemetery-line", {
+                cemeteryName: assignData.cemetery.name,
+                city: assignData.cemetery.city,
+                state: assignData.cemetery.state,
+              })}
+            </p>
+          </div>
         </div>
-        {submitError && <p className="text-red-600 text-sm mb-2">{submitError}</p>}
-        {canFinishAt > 0 && finishCountdown > 0 ? (
-          <p className="text-charcoal/70 text-sm mb-2">{t("finish-available-in", { seconds: finishCountdown })}</p>
-        ) : null}
-        <button
-          type="button"
-          onClick={handleFinish}
-          disabled={!finishEnabled}
-          className="w-full rounded-lg bg-primary px-6 py-3 text-cream font-medium shadow-md hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {t("finish")}
-        </button>
+        <div className="flex-1 px-4 pb-4">
+          <div className="rounded-lg bg-cream/30 border border-charcoal/10 p-5">
+            <p className="text-charcoal whitespace-pre-wrap font-serif leading-relaxed text-lg">
+              {tPrayers(selectedType)}
+            </p>
+          </div>
+        </div>
+        <div className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-cream border-t border-charcoal/10 px-4 pt-3 pb-6 shadow-lg">
+          {submitError && <p className="text-red-600 text-sm mb-2 text-center">{submitError}</p>}
+          {canFinishAt > 0 && finishCountdown > 0 && (
+            <p className="text-charcoal/70 text-sm mb-2 text-center">{t("finish-available-in", { seconds: finishCountdown })}</p>
+          )}
+          <div className="flex gap-3">
+            <Link
+              href="/"
+              className="flex-1 rounded-lg border-2 border-charcoal/30 px-4 py-3 text-charcoal font-medium hover:bg-charcoal/5 transition text-center"
+            >
+              Exit
+            </Link>
+            <button
+              type="button"
+              onClick={handleFinish}
+              disabled={!finishEnabled}
+              className="flex-1 rounded-lg bg-primary px-6 py-3 text-cream font-medium shadow-md hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {t("finish")}
+            </button>
+          </div>
+        </div>
       </main>
     );
   }

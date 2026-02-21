@@ -99,6 +99,16 @@ export function getVisualBeads(beads: RosaryBead[]): VisualBead[] {
 /** Our Father bead index that starts each decade (1–5). */
 const DECADE_OF_INDEX = [7, 20, 33, 46, 59];
 
+/** Beads for one decade only: OF, 10 HM, GB, Fatima, OF (14 steps). Decade 1–5. */
+export function getBeadsForDecade(decadeNumber: number): RosaryBead[] {
+  const full = getRosaryBeads();
+  const start = DECADE_OF_INDEX[decadeNumber - 1] ?? 7;
+  const slice = full.slice(start, start + 14);
+  return slice.map((b, i) => ({ ...b, index: i }));
+}
+
+export const DECADE_BEAD_COUNT = 14;
+
 /** Current decade (1–5) for display: stays the same until the Our Father of the *next* decade. Intro shows decade 1. */
 export function getCurrentDecade(beadIndex: number): number {
   if (beadIndex < DECADE_OF_INDEX[0]) return 1;

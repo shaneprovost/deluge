@@ -1,10 +1,20 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Poppins, Lora } from "next/font/google";
 import "./globals.css";
 import { I18nProvider } from "@/components/I18nProvider";
 import { Header } from "@/components/Header";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-poppins",
+});
+
+const lora = Lora({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-lora",
+});
 
 export const metadata: Metadata = {
   title: "Deluge – Pray for the Faithful Departed",
@@ -19,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans`}>
+      <body className={`${poppins.variable} ${lora.variable} font-sans`}>
         <I18nProvider>
           <Header />
           {children}
