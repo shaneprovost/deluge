@@ -2,34 +2,33 @@
   "$schema": "https://mintlify.com/schema.json",
   "name": "Deluge",
   "description": "Prayer tracking for the Atlanta Archdiocese",
+  "favicon": "/favicon.png",
   "colors": {
     "primary": "#2563eb",
     "light": "#3b82f6",
     "dark": "#1d4ed8"
   },
-  "navigation": {
-    "groups": [
-      {
-        "group": "Overview",
-        "pages": [
-          "docs/ARCHITECTURE",
-          "docs/IMPLEMENTATION_PLAN"
-        ]
-      },
-      {
-        "group": "API & Data",
-        "pages": [
-          "docs/API_CONTRACTS",
-          "docs/DYNAMODB_SCHEMA",
-          "docs/TYPE_DEFINITIONS"
-        ]
-      },
-      {
-        "group": "Operations",
-        "pages": [
-          "docs/CICD"
-        ]
-      }
-    ]
-  }
+  "navigation": [
+    {
+      "group": "Overview",
+      "pages": [
+        "docs/ARCHITECTURE",
+        "docs/IMPLEMENTATION_PLAN"
+      ]
+    },
+    {
+      "group": "API & Data",
+      "pages": [
+        "docs/API_CONTRACTS",
+        "docs/DYNAMODB_SCHEMA",
+        "docs/TYPE_DEFINITIONS"
+      ]
+    },
+    {
+      "group": "Operations",
+      "pages": [
+        "docs/CICD"
+      ]
+    }
+  ]
 }
