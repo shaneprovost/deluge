@@ -4,6 +4,8 @@ import { CemeteriesQuerySchema } from "@/lib/validation/schemas";
 import type { CemeteryWithStats, CemeteryStats } from "@/lib/types";
 import { DEFAULT_ARCHDIOCESE } from "@/config/constants";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

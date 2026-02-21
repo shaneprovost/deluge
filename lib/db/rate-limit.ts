@@ -8,6 +8,13 @@ import {
 const TABLE = "rate-limits";
 const TTL_SECONDS = 7200; // 2 hours from window start
 
+function isResourceNotFound(err: unknown): boolean {
+  return (
+    (err as { name?: string }).name === "ResourceNotFoundException" ||
+    (err as { __type?: string }).__type?.includes("ResourceNotFoundException") === true
+  );
+}
+
 function hourBucket(): string {
   return new Date().toISOString().slice(0, 13); // e.g. 2024-01-15T10
 }
@@ -67,69 +74,94 @@ export interface RateLimitResult {
 /**
  * Check and consume one unit of rate limit for assignment requests.
  * Returns allowed: false with retryAfterSeconds when over limit.
+ * If the rate-limits table does not exist (ResourceNotFoundException), allows the request and logs a warning.
  */
 export async function checkRateLimitAssign(
   sessionId: string,
   ipHash: string
 ): Promise<RateLimitResult> {
-  const sk = hourBucket();
-  const sessionPk = `session:${sessionId}`;
-  const ipPk = `ip:${ipHash}`;
+  try {
+    const sk = hourBucket();
+    const sessionPk = `session:${sessionId}`;
+    const ipPk = `ip:${ipHash}`;
 
-  const [sessionCount, ipCount] = await Promise.all([
-    getCount(sessionPk, sk),
-    getCount(ipPk, sk),
-  ]);
+    const [sessionCount, ipCount] = await Promise.all([
+      getCount(sessionPk, sk),
+      getCount(ipPk, sk),
+    ]);
 
-  if (sessionCount >= RATE_LIMIT_SESSION_PER_HOUR) {
-    return { allowed: false, retryAfterSeconds: getSecondsUntilNextHour() };
+    if (sessionCount >= RATE_LIMIT_SESSION_PER_HOUR) {
+      return { allowed: false, retryAfterSeconds: getSecondsUntilNextHour() };
+    }
+    if (ipCount >= RATE_LIMIT_IP_PER_HOUR) {
+      return { allowed: false, retryAfterSeconds: getSecondsUntilNextHour() };
+    }
+
+    await Promise.all([
+      incrementCount(sessionPk, sk),
+      incrementCount(ipPk, sk),
+    ]);
+    return { allowed: true };
+  } catch (err) {
+    if (isResourceNotFound(err)) {
+      const tableName = getTableName(TABLE);
+      const region = process.env.AWS_REGION ?? "us-east-1";
+      console.warn(
+        `Rate limits table not found; allowing request. Table: ${tableName}, region: ${region}. ` +
+          "Verify the CDK stack was deployed to this region and DYNAMODB_TABLE_PREFIX matches (e.g. deluge-staging)."
+      );
+      return { allowed: true };
+    }
+    throw err;
   }
-  if (ipCount >= RATE_LIMIT_IP_PER_HOUR) {
-    return { allowed: false, retryAfterSeconds: getSecondsUntilNextHour() };
-  }
-
-  await Promise.all([
-    incrementCount(sessionPk, sk),
-    incrementCount(ipPk, sk),
-  ]);
-  return { allowed: true };
 }
 
 /**
  * Check (without incrementing) whether the client is over the prayer submission rate limit.
- * Use a separate identifier if you want different limits for "assign" vs "pray" (e.g. pray:session, pray:ip).
+ * If the rate-limits table does not exist, allows the request.
  */
 export async function checkRateLimitPray(
   sessionId: string,
   ipHash: string
 ): Promise<RateLimitResult> {
-  const sk = hourBucket();
-  const sessionPk = `pray:session:${sessionId}`;
-  const ipPk = `pray:ip:${ipHash}`;
+  try {
+    const sk = hourBucket();
+    const sessionPk = `pray:session:${sessionId}`;
+    const ipPk = `pray:ip:${ipHash}`;
 
-  const [sessionCount, ipCount] = await Promise.all([
-    getCount(sessionPk, sk),
-    getCount(ipPk, sk),
-  ]);
+    const [sessionCount, ipCount] = await Promise.all([
+      getCount(sessionPk, sk),
+      getCount(ipPk, sk),
+    ]);
 
-  // Same limits as assign for MVP; could be different (e.g. 30 prayers/hour)
-  if (sessionCount >= RATE_LIMIT_SESSION_PER_HOUR) {
-    return { allowed: false, retryAfterSeconds: getSecondsUntilNextHour() };
+    if (sessionCount >= RATE_LIMIT_SESSION_PER_HOUR) {
+      return { allowed: false, retryAfterSeconds: getSecondsUntilNextHour() };
+    }
+    if (ipCount >= RATE_LIMIT_IP_PER_HOUR) {
+      return { allowed: false, retryAfterSeconds: getSecondsUntilNextHour() };
+    }
+    return { allowed: true };
+  } catch (err) {
+    if (isResourceNotFound(err)) {
+      return { allowed: true };
+    }
+    throw err;
   }
-  if (ipCount >= RATE_LIMIT_IP_PER_HOUR) {
-    return { allowed: false, retryAfterSeconds: getSecondsUntilNextHour() };
-  }
-  return { allowed: true };
 }
 
-/** Increment prayer rate limit counters (call after recording a prayer). */
+/** Increment prayer rate limit counters (call after recording a prayer). No-op if rate-limits table does not exist. */
 export async function incrementRateLimitPray(
   sessionId: string,
   ipHash: string
 ): Promise<void> {
-  const sk = hourBucket();
-  await Promise.all([
-    incrementCount(`pray:session:${sessionId}`, sk),
-    incrementCount(`pray:ip:${ipHash}`, sk),
-  ]);
+  try {
+    const sk = hourBucket();
+    await Promise.all([
+      incrementCount(`pray:session:${sessionId}`, sk),
+      incrementCount(`pray:ip:${ipHash}`, sk),
+    ]);
+  } catch (err) {
+    if (isResourceNotFound(err)) return;
+    throw err;
+  }
 }

@@ -1,8 +1,437 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useTranslation } from "react-i18next";
+import type { PrayerType } from "@/lib/types";
+import type { MysterySet } from "@/lib/rosary";
+import { PRAY_MINIMUM_SECONDS } from "@/config/constants";
+
+const MYSTERY_SETS: MysterySet[] = ["joyful", "sorrowful", "glorious", "luminous"];
+
+const PRAYER_TYPES: PrayerType[] = [
+  "our_father",
+  "hail_mary",
+  "decade_rosary",
+  "full_rosary",
+  "mass",
+  "divine_mercy_chaplet",
+  "other",
+];
+
+type AssignData = {
+  personId: string;
+  firstName: string;
+  lastInitial: string;
+  yearOfDeath: number;
+  role: string;
+  cemetery: { cemeteryId: string; name: string; city: string; state: string };
+};
+
+type FlowState =
+  | "loading"
+  | "assign_error"
+  | "choose_type"
+  | "praying"
+  | "submitting"
+  | "thank_you";
+
+const SESSION_COUNT_KEY = "deluge_session_pray_count";
+
+function getSessionPrayCount(): number {
+  if (typeof window === "undefined") return 0;
+  const s = sessionStorage.getItem(SESSION_COUNT_KEY);
+  return s ? Math.max(0, parseInt(s, 10)) : 0;
+}
+
+function incrementSessionPrayCount(): number {
+  const n = getSessionPrayCount() + 1;
+  sessionStorage.setItem(SESSION_COUNT_KEY, String(n));
+  return n;
+}
+
 export default function PrayPage() {
-  return (
-    <main className="min-h-screen p-8">
-      <h1 className="font-serif text-2xl text-primary mb-4">Pray for someone</h1>
-      <p className="text-charcoal/80">Prayer flow UI will go here.</p>
-    </main>
-  );
+  const { t } = useTranslation("pray");
+  const { t: tPrayers } = useTranslation("prayers");
+  const { t: tRosary } = useTranslation("rosary");
+  const router = useRouter();
+  const [flowState, setFlowState] = useState<FlowState>("loading");
+  const [assignData, setAssignData] = useState<AssignData | null>(null);
+  const [selectedType, setSelectedType] = useState<PrayerType | null>(null);
+  const [selectedDecadeMystery, setSelectedDecadeMystery] = useState<{ mysterySet: MysterySet; decade: number } | null>(null);
+  const [expandedMysterySet, setExpandedMysterySet] = useState<MysterySet | null>(null);
+  const [assignError, setAssignError] = useState<{ message: string; retryAfterSeconds?: number } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [canFinishAt, setCanFinishAt] = useState<number>(0);
+  const [finishCountdown, setFinishCountdown] = useState(0);
+  const [sessionCount, setSessionCount] = useState(0);
+
+  const fetchAssign = useCallback(async () => {
+    setFlowState("loading");
+    setAssignError(null);
+    try {
+      const res = await fetch("/api/assign");
+      const json = await res.json();
+      if (!res.ok) {
+        setAssignError({
+          message: json?.error?.message ?? t("error-no-candidates"),
+          retryAfterSeconds: json?.error?.retryAfterSeconds,
+        });
+        setFlowState("assign_error");
+        return;
+      }
+      if (json.success && json.data) {
+        setAssignData(json.data);
+        setSelectedType(null);
+        setFlowState("choose_type");
+      } else {
+        setAssignError({ message: t("error-no-candidates") });
+        setFlowState("assign_error");
+      }
+    } catch {
+      setAssignError({ message: t("error-no-candidates") });
+      setFlowState("assign_error");
+    }
+  }, [t]);
+
+  useEffect(() => {
+    fetchAssign();
+  }, [fetchAssign]);
+
+  // 15s countdown: enable Finish after PRAY_MINIMUM_SECONDS; tick every second for display
+  useEffect(() => {
+    if (flowState !== "praying") return;
+    const deadline = Date.now() + PRAY_MINIMUM_SECONDS * 1000;
+    setCanFinishAt(deadline);
+    setFinishCountdown(PRAY_MINIMUM_SECONDS);
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setFinishCountdown(remaining);
+      if (remaining <= 0) setCanFinishAt(0);
+    }, 500);
+    return () => clearInterval(interval);
+  }, [flowState]);
+
+  const handleStart = useCallback(() => {
+    if (!selectedType) return;
+    if (selectedType === "decade_rosary") {
+      if (!selectedDecadeMystery || !assignData) return;
+      try {
+        sessionStorage.setItem("deluge_rosary_single_person", JSON.stringify(assignData));
+        sessionStorage.setItem("deluge_rosary_decade", JSON.stringify(selectedDecadeMystery));
+      } catch {
+        // ignore
+      }
+      router.push("/pray/rosary");
+      return;
+    }
+    if (selectedType === "full_rosary") {
+      if (assignData) {
+        try {
+          sessionStorage.setItem("deluge_rosary_single_person", JSON.stringify(assignData));
+        } catch {
+          // ignore
+        }
+      }
+      router.push("/pray/rosary");
+      return;
+    }
+    setFlowState("praying");
+  }, [selectedType, router, assignData, selectedDecadeMystery]);
+
+  const handleFinish = useCallback(async () => {
+    if (!assignData || !selectedType) return;
+    if (Date.now() < canFinishAt) return;
+    setFlowState("submitting");
+    setSubmitError(null);
+    try {
+      const res = await fetch("/api/pray", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personId: assignData.personId, prayerType: selectedType }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setSubmitError(json?.error?.message ?? t("error-submit"));
+        setFlowState("praying");
+        return;
+      }
+      setSessionCount(incrementSessionPrayCount());
+      setFlowState("thank_you");
+    } catch {
+      setSubmitError(t("error-submit"));
+      setFlowState("praying");
+    }
+  }, [assignData, selectedType, canFinishAt, t]);
+
+  const handlePrayForAnother = useCallback(() => {
+    fetchAssign();
+  }, [fetchAssign]);
+
+  const roleLabel = assignData ? t(`role-${assignData.role}` as "role-priest") : "";
+
+  if (flowState === "loading") {
+    return (
+      <main className="min-h-screen p-8 flex flex-col items-center justify-center">
+        <p className="text-charcoal/80">{t("loading")}</p>
+      </main>
+    );
+  }
+
+  if (flowState === "assign_error") {
+    return (
+      <main className="min-h-screen p-8 flex flex-col items-center justify-center max-w-md mx-auto text-center">
+        <p className="text-charcoal/80 mb-6">{assignError?.message}</p>
+        <div className="flex gap-4">
+          <button
+            type="button"
+            onClick={fetchAssign}
+            className="rounded-lg bg-primary px-6 py-3 text-cream font-medium shadow-md hover:opacity-90 transition"
+          >
+            {t("try-again")}
+          </button>
+          <Link
+            href="/"
+            className="rounded-lg border-2 border-primary px-6 py-3 text-primary font-medium hover:bg-primary/5 transition"
+          >
+            {t("done")}
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (flowState === "choose_type" && assignData) {
+    return (
+      <main className="min-h-screen p-8 max-w-lg mx-auto">
+        <p className="font-serif text-2xl text-primary mb-1">
+          {t("pray-for-name", {
+            firstName: assignData.firstName,
+            lastInitial: assignData.lastInitial,
+          })}
+        </p>
+        <p className="text-charcoal/70 text-base mb-1">
+          + {t("year-role-line", {
+            year: assignData.yearOfDeath,
+            role: roleLabel,
+          })}
+        </p>
+        <p className="text-charcoal/60 text-sm mb-6">
+          {t("cemetery-line", {
+            cemeteryName: assignData.cemetery.name,
+            city: assignData.cemetery.city,
+            state: assignData.cemetery.state,
+          })}
+        </p>
+        <p className="font-medium text-charcoal mb-3">{t("choose-how-for", { firstName: assignData.firstName })}</p>
+        <ul className="space-y-2 mb-4">
+          {PRAYER_TYPES.map((type) => {
+            if (type === "decade_rosary") {
+              const isExpanded = selectedType === "decade_rosary";
+              return (
+                <li
+                  key={type}
+                  className={`rounded-lg border-2 overflow-hidden transition ${
+                    isExpanded ? "border-primary" : "border-charcoal/20"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isExpanded) {
+                        setSelectedType(null);
+                        setSelectedDecadeMystery(null);
+                        setExpandedMysterySet(null);
+                      } else {
+                        setSelectedType("decade_rosary");
+                        setExpandedMysterySet(null);
+                        setSelectedDecadeMystery(null);
+                      }
+                    }}
+                    className={`w-full text-left px-4 py-3 flex items-center justify-between transition ${
+                      isExpanded ? "bg-primary/10 text-primary" : "text-charcoal hover:bg-charcoal/5"
+                    }`}
+                  >
+                    <span>{t(`prayer-type-${type}`)}</span>
+                    <span className="shrink-0 ml-2 text-current opacity-70" aria-hidden>
+                      {isExpanded ? "−" : "+"}
+                    </span>
+                  </button>
+                  {isExpanded && (
+                    <div className="border-t border-charcoal/10 bg-cream/30 px-2 pb-2 pt-1">
+                      <p className="font-medium text-charcoal/80 text-sm mb-2 px-2">{t("choose-decade-mystery")}</p>
+                      <div className="space-y-1">
+                        {MYSTERY_SETS.map((set) => (
+                          <div key={set} className="rounded-lg border border-charcoal/20 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedMysterySet((prev) => (prev === set ? null : set))}
+                              className="w-full text-left px-4 py-2.5 flex items-center justify-between bg-cream hover:bg-charcoal/5 transition text-sm"
+                            >
+                              <span className="font-medium text-charcoal">{tRosary(set)}</span>
+                              <span className="text-charcoal/60" aria-hidden>
+                                {expandedMysterySet === set ? "−" : "+"}
+                              </span>
+                            </button>
+                            {expandedMysterySet === set && (
+                              <div className="border-t border-charcoal/10 bg-cream/50">
+                                {[1, 2, 3, 4, 5].map((decade) => (
+                                  <button
+                                    key={decade}
+                                    type="button"
+                                    onClick={() => setSelectedDecadeMystery({ mysterySet: set, decade })}
+                                    className={`w-full text-left px-4 py-2 text-sm transition ${
+                                      selectedDecadeMystery?.mysterySet === set && selectedDecadeMystery?.decade === decade
+                                        ? "bg-primary/15 text-primary font-medium"
+                                        : "text-charcoal hover:bg-charcoal/5"
+                                    }`}
+                                  >
+                                    {tRosary(`${set}-${decade}`)}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            }
+            return (
+              <li key={type}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedType(type);
+                    setSelectedDecadeMystery(null);
+                  }}
+                  className={`w-full text-left rounded-lg border-2 px-4 py-3 transition ${
+                    selectedType === type
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-charcoal/20 text-charcoal hover:border-primary/50"
+                  }`}
+                >
+                  {t(`prayer-type-${type}`)}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <button
+          type="button"
+          onClick={handleStart}
+          disabled={!selectedType || (selectedType === "decade_rosary" && !selectedDecadeMystery)}
+          className="w-full rounded-lg bg-primary px-6 py-3 text-cream font-medium shadow-md hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {t("start")}
+        </button>
+      </main>
+    );
+  }
+
+  if (flowState === "praying" && assignData && selectedType) {
+    const finishEnabled = canFinishAt === 0;
+
+    return (
+      <main className="min-h-screen flex flex-col max-w-lg mx-auto bg-cream pb-32">
+        <div className="flex-shrink-0 px-4 pt-4 pb-3">
+          <p className="text-charcoal/60 text-sm mb-2">
+            {t(`prayer-type-${selectedType}`)}
+          </p>
+          <div className="mb-3">
+            <p className="font-serif text-xl text-primary leading-snug">
+              {t("person-line", {
+                firstName: assignData.firstName,
+                lastInitial: assignData.lastInitial,
+                year: assignData.yearOfDeath,
+                role: roleLabel,
+              })}
+            </p>
+            <p className="text-charcoal/70 text-base leading-snug mt-1">
+              {t("cemetery-line", {
+                cemeteryName: assignData.cemetery.name,
+                city: assignData.cemetery.city,
+                state: assignData.cemetery.state,
+              })}
+            </p>
+          </div>
+        </div>
+        <div className="flex-1 px-4 pb-4">
+          <div className="rounded-lg bg-cream/30 border border-charcoal/10 p-5">
+            <p className="text-charcoal whitespace-pre-wrap font-serif leading-relaxed text-lg">
+              {tPrayers(selectedType)}
+            </p>
+          </div>
+        </div>
+        <div className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-cream border-t border-charcoal/10 px-4 pt-3 pb-6 shadow-lg">
+          {submitError && <p className="text-red-600 text-sm mb-2 text-center">{submitError}</p>}
+          {canFinishAt > 0 && finishCountdown > 0 && (
+            <p className="text-charcoal/70 text-sm mb-2 text-center">{t("finish-available-in", { seconds: finishCountdown })}</p>
+          )}
+          <div className="flex gap-3">
+            <Link
+              href="/"
+              className="flex-1 rounded-lg border-2 border-charcoal/30 px-4 py-3 text-charcoal font-medium hover:bg-charcoal/5 transition text-center"
+            >
+              Exit
+            </Link>
+            <button
+              type="button"
+              onClick={handleFinish}
+              disabled={!finishEnabled}
+              className="flex-1 rounded-lg bg-primary px-6 py-3 text-cream font-medium shadow-md hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {t("finish")}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (flowState === "submitting") {
+    return (
+      <main className="min-h-screen p-8 flex flex-col items-center justify-center">
+        <p className="text-charcoal/80">{t("recording")}</p>
+      </main>
+    );
+  }
+
+  if (flowState === "thank_you" && assignData) {
+    return (
+      <main className="min-h-screen p-8 max-w-lg mx-auto flex flex-col items-center text-center">
+        <h2 className="font-serif text-2xl text-primary mb-4">
+          {t("thank-you", {
+            firstName: assignData.firstName,
+            lastInitial: assignData.lastInitial,
+          })}
+        </h2>
+        {sessionCount > 0 && (
+          <p className="text-charcoal/80 mb-6">
+            {t("you-prayed-count", { count: sessionCount })}
+          </p>
+        )}
+        <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={handlePrayForAnother}
+            className="rounded-lg bg-primary px-6 py-3 text-cream font-medium shadow-md hover:opacity-90 transition"
+          >
+            {t("pray-for-another")}
+          </button>
+          <Link
+            href="/"
+            className="rounded-lg border-2 border-primary px-6 py-3 text-primary font-medium hover:bg-primary/5 transition text-center"
+          >
+            {t("done")}
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  return null;
 }
