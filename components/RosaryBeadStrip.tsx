@@ -68,7 +68,8 @@ function TripleBead({
   const [i0, i1, i2] = indices;
   const completed = currentIndex > i2 ? 3 : currentIndex > i1 ? 2 : currentIndex > i0 ? 1 : 0;
   const currentSegment = currentIndex === i0 ? 0 : currentIndex === i1 ? 1 : currentIndex === i2 ? 2 : -1;
-  const showPerson = currentSegment >= 0 ? beads[indices[currentSegment]] : beads[i2];
+  const segmentIndex: 0 | 1 | 2 | null = currentSegment >= 0 ? (currentSegment as 0 | 1 | 2) : null;
+  const showPerson = segmentIndex !== null ? beads[indices[segmentIndex]] : beads[i2];
   const label = showPerson ? `${showPerson.firstName} ${showPerson.lastInitial}.` : "—";
 
   return (
