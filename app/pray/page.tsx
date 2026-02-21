@@ -226,64 +226,100 @@ export default function PrayPage() {
         </p>
         <p className="font-medium text-charcoal mb-3">{t("choose-how-for", { firstName: assignData.firstName })}</p>
         <ul className="space-y-2 mb-4">
-          {PRAYER_TYPES.map((type) => (
-            <li key={type}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedType(type);
-                  if (type !== "decade_rosary") setSelectedDecadeMystery(null);
-                }}
-                className={`w-full text-left rounded-lg border-2 px-4 py-3 transition ${
-                  selectedType === type
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-charcoal/20 text-charcoal hover:border-primary/50"
-                }`}
-              >
-                {t(`prayer-type-${type}`)}
-              </button>
-            </li>
-          ))}
-        </ul>
-        {selectedType === "decade_rosary" && (
-          <div className="mb-6">
-            <p className="font-medium text-charcoal mb-2">{t("choose-decade-mystery")}</p>
-            <div className="space-y-1">
-              {MYSTERY_SETS.map((set) => (
-                <div key={set} className="rounded-lg border border-charcoal/20 overflow-hidden">
+          {PRAYER_TYPES.map((type) => {
+            if (type === "decade_rosary") {
+              const isExpanded = selectedType === "decade_rosary";
+              return (
+                <li
+                  key={type}
+                  className={`rounded-lg border-2 overflow-hidden transition ${
+                    isExpanded ? "border-primary" : "border-charcoal/20"
+                  }`}
+                >
                   <button
                     type="button"
-                    onClick={() => setExpandedMysterySet((prev) => (prev === set ? null : set))}
-                    className="w-full text-left px-4 py-3 flex items-center justify-between bg-cream hover:bg-charcoal/5 transition"
+                    onClick={() => {
+                      if (isExpanded) {
+                        setSelectedType(null);
+                        setSelectedDecadeMystery(null);
+                        setExpandedMysterySet(null);
+                      } else {
+                        setSelectedType("decade_rosary");
+                        setExpandedMysterySet(null);
+                        setSelectedDecadeMystery(null);
+                      }
+                    }}
+                    className={`w-full text-left px-4 py-3 flex items-center justify-between transition ${
+                      isExpanded ? "bg-primary/10 text-primary" : "text-charcoal hover:bg-charcoal/5"
+                    }`}
                   >
-                    <span className="font-medium text-charcoal">{tRosary(set)}</span>
-                    <span className="text-charcoal/60" aria-hidden>
-                      {expandedMysterySet === set ? "−" : "+"}
+                    <span>{t(`prayer-type-${type}`)}</span>
+                    <span className="shrink-0 ml-2 text-current opacity-70" aria-hidden>
+                      {isExpanded ? "−" : "+"}
                     </span>
                   </button>
-                  {expandedMysterySet === set && (
-                    <div className="border-t border-charcoal/10 bg-cream/50">
-                      {[1, 2, 3, 4, 5].map((decade) => (
-                        <button
-                          key={decade}
-                          type="button"
-                          onClick={() => setSelectedDecadeMystery({ mysterySet: set, decade })}
-                          className={`w-full text-left px-4 py-2.5 text-sm transition ${
-                            selectedDecadeMystery?.mysterySet === set && selectedDecadeMystery?.decade === decade
-                              ? "bg-primary/15 text-primary font-medium"
-                              : "text-charcoal hover:bg-charcoal/5"
-                          }`}
-                        >
-                          {tRosary(`${set}-${decade}`)}
-                        </button>
-                      ))}
+                  {isExpanded && (
+                    <div className="border-t border-charcoal/10 bg-cream/30 px-2 pb-2 pt-1">
+                      <p className="font-medium text-charcoal/80 text-sm mb-2 px-2">{t("choose-decade-mystery")}</p>
+                      <div className="space-y-1">
+                        {MYSTERY_SETS.map((set) => (
+                          <div key={set} className="rounded-lg border border-charcoal/20 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedMysterySet((prev) => (prev === set ? null : set))}
+                              className="w-full text-left px-4 py-2.5 flex items-center justify-between bg-cream hover:bg-charcoal/5 transition text-sm"
+                            >
+                              <span className="font-medium text-charcoal">{tRosary(set)}</span>
+                              <span className="text-charcoal/60" aria-hidden>
+                                {expandedMysterySet === set ? "−" : "+"}
+                              </span>
+                            </button>
+                            {expandedMysterySet === set && (
+                              <div className="border-t border-charcoal/10 bg-cream/50">
+                                {[1, 2, 3, 4, 5].map((decade) => (
+                                  <button
+                                    key={decade}
+                                    type="button"
+                                    onClick={() => setSelectedDecadeMystery({ mysterySet: set, decade })}
+                                    className={`w-full text-left px-4 py-2 text-sm transition ${
+                                      selectedDecadeMystery?.mysterySet === set && selectedDecadeMystery?.decade === decade
+                                        ? "bg-primary/15 text-primary font-medium"
+                                        : "text-charcoal hover:bg-charcoal/5"
+                                    }`}
+                                  >
+                                    {tRosary(`${set}-${decade}`)}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+                </li>
+              );
+            }
+            return (
+              <li key={type}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedType(type);
+                    setSelectedDecadeMystery(null);
+                  }}
+                  className={`w-full text-left rounded-lg border-2 px-4 py-3 transition ${
+                    selectedType === type
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-charcoal/20 text-charcoal hover:border-primary/50"
+                  }`}
+                >
+                  {t(`prayer-type-${type}`)}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
         <button
           type="button"
           onClick={handleStart}
