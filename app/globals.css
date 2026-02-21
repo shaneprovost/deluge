@@ -11,4 +11,5 @@
 
 body {
   @apply bg-cream text-charcoal antialiased;
+  font-feature-settings: "kern" 1, "liga" 1;
 }

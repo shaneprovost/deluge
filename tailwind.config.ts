@@ -15,8 +15,8 @@ const config: Config = {
         charcoal: "#2D2D2D",
       },
       fontFamily: {
-        serif: ["Georgia", "serif"],
-        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        sans: ["var(--font-poppins)", "system-ui", "sans-serif"],
+        serif: ["var(--font-lora)", "Georgia", "serif"],
       },
     },
   },
